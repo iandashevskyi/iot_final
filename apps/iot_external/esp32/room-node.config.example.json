@@ -1,0 +1,16 @@
+{
+  "deviceId": "esp32-room-01",
+  "wifi": {
+    "ssid": "YOUR_WIFI_SSID",
+    "password": "YOUR_WIFI_PASSWORD"
+  },
+  "transport": {
+    "type": "mqtt_ws",
+    "brokerUrl": "ws://172.16.22.140:1886",
+    "telemetryTopic": "iot_proj/sensors",
+    "commandTopic": "iot_proj/actions"
+  },
+  "sampling": {
+    "telemetryIntervalMs": 5000
+  }
+}
