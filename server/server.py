@@ -15,6 +15,12 @@ TOPIC_MODE = "iot_proj/mode"
 
 current_mode = "auto"
 
+latest_outdoor_data = {
+    "out_temp": 15.0,
+    "out_hum": 50.0,
+    "out_co2": 400.0
+}
+
 global_targets = {
     "temp_min": 21.0,
     "temp_max": 24.0,
@@ -24,7 +30,12 @@ global_targets = {
 }
 
 try:
-    agent_path = "dqn_climate_agent_new.zip" if os.path.exists("dqn_climate_agent_new.zip") else "agent.zip"
+    if os.path.exists("dqn_climate_agent_new.zip"):
+        agent_path = "dqn_climate_agent_new.zip"
+    elif os.path.exists("dqn_climate_agent.zip"):
+        agent_path = "dqn_climate_agent.zip"
+    else:
+        agent_path = "agent.zip"
     print(f"Загрузка агента из {agent_path}...")
     agent = DQN.load(agent_path)
     print("Агент успешно загружен!")
@@ -86,6 +97,12 @@ def on_message(client, userdata, msg):
         if current_mode == "manual":
             return
 
+        if "out_temp" in data:
+            latest_outdoor_data["out_temp"] = data.get("out_temp", latest_outdoor_data["out_temp"])
+            latest_outdoor_data["out_hum"] = data.get("out_hum", latest_outdoor_data["out_hum"])
+            latest_outdoor_data["out_co2"] = data.get("out_co2", latest_outdoor_data["out_co2"])
+            return
+
         if "in_temp" not in data:
             return
 
@@ -94,8 +111,11 @@ def on_message(client, userdata, msg):
             print("[СЕРВЕР] Данные не прошли валидацию. Пропуск.")
             return
             
-        #ожидает вектор из 8 значений in_temp, in_hum, in_co2, target_temp_min, target_temp_max, target_hum_min, target_hum_max, target_co2_max
+        #ожидает вектор из 11 значений: in_temp, in_hum, in_co2, out_temp, out_hum, out_co2, target_temp_min, target_temp_max, target_hum_min, target_hum_max, target_co2_max
         obs_list = valid_data + [
+            latest_outdoor_data["out_temp"],
+            latest_outdoor_data["out_hum"],
+            latest_outdoor_data["out_co2"],
             global_targets["temp_min"],
             global_targets["temp_max"],
             global_targets["hum_min"],
