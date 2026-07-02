@@ -223,3 +223,56 @@ flowchart TD
     
     SendError --> HasData
 ```
+
+## 8. Веб-приложение (Smart Climate Dashboard)
+
+Схема показывает потоки данных между фронтендом на React, бэкендом (с MQTT Bridge) и самим брокером. Веб-интерфейс получает актуальное состояние каждые 5 секунд и отправляет команды для смены целевых значений и ручного управления.
+
+```mermaid
+flowchart TD
+    User([Пользователь]) -->|Открывает в браузере| Frontend["<b>Frontend (React)</b><br>App.tsx / DashboardPreview"]
+    
+    subgraph WebApp [Web Application]
+        Frontend -->|GET /api/snapshot<br>Каждые 5 сек| BackendAPI["<b>Backend (Python REST API)</b><br>api/routes.py"]
+        Frontend -->|POST /api/targets<br>POST /api/mode| BackendAPI
+        BackendAPI <--> StateStore[("<b>In-Memory State</b><br>snapshot_store")]
+        BackendAPI --> MQTTBridge["<b>MQTT Bridge</b><br>mqtt_bridge.py"]
+    end
+    
+    subgraph IoTBroker [MQTT Broker]
+        Broker[172.16.22.140:1886]
+    end
+    
+    MQTTBridge -->|Публикует: targets, mode, actions| Broker
+    Broker -->|Подписка: sensors, actions| MQTTBridge
+```
+
+## 9. Десктоп-утилита конфигурации (ESP32 Configurator)
+
+Приложение на `tkinter` для первоначальной прошивки параметров сети и MQTT в память микроконтроллера через USB.
+
+```mermaid
+flowchart TD
+    Start([Запуск ESP32Configurator.exe]) --> UI[Tkinter GUI]
+    UI --> Scan[Поиск COM-портов]
+    
+    Scan --> Input["Ввод параметров:<br>Wi-Fi SSID, Password, MQTT Broker,<br>Топики, Device ID"]
+    Input --> Validate{"Валидация<br>(build_payload)"}
+    
+    Validate -- Ошибка --> ShowErr1[Показ ошибки в UI]
+    Validate -- Успешно --> JSON[Формирование JSON строки]
+    
+    JSON --> SendWorker["Запуск потока _send_worker"]
+    SendWorker --> OpenSerial["Открытие Serial порта<br>(115200 бод)"]
+    
+    OpenSerial --> Write["Отправка JSON + \\n"]
+    Write --> WaitResponse{"Ждем ответа<br>от ESP32"}
+    
+    WaitResponse -- Timeout / Ошибка --> ErrorQueue[Помещение ошибки в Queue]
+    WaitResponse -- Получен ответ --> SuccessQueue[Помещение ответа в Queue]
+    
+    ErrorQueue --> Drain["Обработчик GUI _drain_events"]
+    SuccessQueue --> Drain
+    
+    Drain --> ShowResult[Вывод статуса на экран]
+```
