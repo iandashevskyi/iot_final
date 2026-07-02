@@ -253,26 +253,31 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    Start([Запуск ESP32Configurator.exe]) --> UI[Tkinter GUI]
-    UI --> Scan[Поиск COM-портов]
+    Start([main()]) --> UI[app = ConfiguratorApp()]
+    UI --> Input[Ввод параметров пользователем]
     
-    Scan --> Input["Ввод параметров:<br>Wi-Fi SSID, Password, MQTT Broker,<br>Топики, Device ID"]
-    Input --> Validate{"Валидация<br>(build_payload)"}
+    Input --> Validate{build_payload()}
+    Validate -- ValueError --> ShowErr[messagebox.showerror()]
+    Validate -- dict --> SendWorker[Thread(_send_worker).start()]
     
-    Validate -- Ошибка --> ShowErr1[Показ ошибки в UI]
-    Validate -- Успешно --> JSON[Формирование JSON строки]
+    SendWorker --> OpenSerial[connection = serial.Serial()]
+    OpenSerial --> Write[connection.write(payload)]
+    Write --> ReadLoop[raw_line = connection.readline()]
     
-    JSON --> SendWorker["Запуск потока _send_worker"]
-    SendWorker --> OpenSerial["Открытие Serial порта<br>(115200 бод)"]
+    ReadLoop --> CheckData{raw_line != b''}
     
-    OpenSerial --> Write["Отправка JSON + \\n"]
-    Write --> WaitResponse{"Ждем ответа<br>от ESP32"}
+    CheckData -- false --> CheckTimeout{time.time() < deadline}
+    CheckTimeout -- true --> ReadLoop
+    CheckTimeout -- false --> QueueTimeout[_event_queue.put(timeout_msg)]
     
-    WaitResponse -- Timeout / Ошибка --> ErrorQueue[Помещение ошибки в Queue]
-    WaitResponse -- Получен ответ --> SuccessQueue[Помещение ответа в Queue]
+    CheckData -- true --> AppendData[response_lines.append(decoded)]
+    AppendData --> CheckCount{len(response_lines) >= 4}
     
-    ErrorQueue --> Drain["Обработчик GUI _drain_events"]
-    SuccessQueue --> Drain
+    CheckCount -- false --> CheckTimeout
+    CheckCount -- true --> QueueSuccess[_event_queue.put(success_msg)]
     
-    Drain --> ShowResult[Вывод статуса на экран]
+    QueueTimeout --> Drain[_drain_events()]
+    QueueSuccess --> Drain
+    
+    Drain --> ShowUI[UI: messagebox.showinfo()]
 ```
